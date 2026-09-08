@@ -6,12 +6,14 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# Create engine
-engine = create_engine(
-    settings.database_url,
-    poolclass=NullPool if settings.environment == "development" else None,
-    echo=settings.debug,
-)
+engine_options = {"echo": settings.debug}
+
+if settings.database_url.startswith("sqlite"):
+    engine_options["connect_args"] = {"check_same_thread": False}
+elif settings.environment == "development":
+    engine_options["poolclass"] = NullPool
+
+engine = create_engine(settings.database_url, **engine_options)
 
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
