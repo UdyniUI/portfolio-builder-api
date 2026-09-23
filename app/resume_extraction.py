@@ -240,7 +240,8 @@ def structure_resume_text(raw_text: str) -> ExtractedResumeData:
         buckets["summary"] = unclassified
         unclassified = []
 
-    missing_sections = [key for key, values in buckets.items() if not values]
+    required_sections = ("summary", "experience", "education", "skills")
+    missing_sections = [key for key in required_sections if not buckets[key]]
     warnings = []
     if missing_sections:
         warnings.append(

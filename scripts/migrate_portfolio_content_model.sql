@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE portfolios
+    ADD COLUMN IF NOT EXISTS content_model JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS content_version INTEGER NOT NULL DEFAULT 1;
+
+COMMIT;

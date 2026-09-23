@@ -48,10 +48,17 @@ class DesignSystem(Base):
     description = Column(Text)
     tokens = Column(JSON, nullable=False)
     is_public = Column(Boolean, nullable=False, default=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    base_design_system_id = Column(
+        Integer, ForeignKey("design_systems.id"), nullable=True
+    )
+    token_overrides = Column(JSON, nullable=False, default=dict)
+    source_markdown = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    base_design_system = relationship("DesignSystem", remote_side=[id], uselist=False)
 
 
 class WireframeTemplate(Base):
@@ -62,7 +69,11 @@ class WireframeTemplate(Base):
     slug = Column(String(100), unique=True, nullable=False)
     description = Column(Text)
     sections = Column(JSON, nullable=False)
+    layout = Column(JSON, nullable=True)
     is_public = Column(Boolean, nullable=False, default=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    source_desktop_filename = Column(String(255), nullable=True)
+    source_mobile_filename = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -81,6 +92,12 @@ class Portfolio(Base):
     resume_upload_id = Column(
         Integer, ForeignKey("resume_uploads.id"), unique=True, nullable=True
     )
+    content_model = Column(JSON, nullable=False, default=dict)
+    content_version = Column(Integer, nullable=False, default=1)
+    builder_revision = Column(Integer, nullable=False, default=1)
+    configuration_status = Column(String(50), nullable=False, default="editing")
+    configuration_snapshot = Column(JSON, nullable=True)
+    configured_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(50), default="draft")  # draft, published, archived
     custom_domain = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

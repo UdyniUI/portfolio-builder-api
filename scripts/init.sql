@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS design_systems (
     description TEXT,
     tokens JSONB NOT NULL,
     is_public BOOLEAN NOT NULL DEFAULT TRUE,
+    owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    base_design_system_id INTEGER REFERENCES design_systems(id) ON DELETE SET NULL,
+    token_overrides JSONB NOT NULL DEFAULT '{}'::jsonb,
+    source_markdown TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -26,7 +30,11 @@ CREATE TABLE IF NOT EXISTS wireframe_templates (
     slug VARCHAR(100) UNIQUE NOT NULL,
     description TEXT,
     sections JSONB NOT NULL,
+    layout JSONB,
     is_public BOOLEAN NOT NULL DEFAULT TRUE,
+    owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    source_desktop_filename VARCHAR(255),
+    source_mobile_filename VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -38,11 +46,18 @@ CREATE TABLE IF NOT EXISTS portfolios (
     slug VARCHAR(255) UNIQUE NOT NULL,
     design_system_id INTEGER REFERENCES design_systems(id),
     template_id INTEGER REFERENCES wireframe_templates(id),
+    content_model JSONB NOT NULL DEFAULT '{}'::jsonb,
+    content_version INTEGER NOT NULL DEFAULT 1,
+    builder_revision INTEGER NOT NULL DEFAULT 1,
+    configuration_status VARCHAR(50) NOT NULL DEFAULT 'editing',
+    configuration_snapshot JSONB,
+    configured_at TIMESTAMPTZ,
     status VARCHAR(50) NOT NULL DEFAULT 'draft',
     custom_domain VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT ck_portfolio_status CHECK (status IN ('draft', 'published', 'archived'))
+    CONSTRAINT ck_portfolio_status CHECK (status IN ('draft', 'published', 'archived')),
+    CONSTRAINT ck_portfolio_configuration_status CHECK (configuration_status IN ('editing', 'configured'))
 );
 
 CREATE TABLE IF NOT EXISTS portfolio_data (
@@ -115,7 +130,7 @@ VALUES
         'Udayani Modern',
         'udayani-modern',
         'Warm editorial portfolio system with sage and amber accents.',
-        '{"colors":{"primary":"#66755b","accent":"#d69a35","ink":"#1f2520","paper":"#f7f3e8"},"typography":{"heading":"Fraunces","body":"Inter","mono":"JetBrains Mono"}}'::jsonb,
+        '{"colors":{"primary":"#5f6e54","accent":"#8a5b0a","ink":"#1f2520","paper":"#f7f3e8"},"typography":{"heading":"Fraunces","body":"Inter","mono":"JetBrains Mono"}}'::jsonb,
         TRUE
     ),
     (
@@ -129,17 +144,42 @@ VALUES
         'Tech Forward',
         'tech-forward',
         'High-clarity technical portfolio system with cyan accents.',
-        '{"colors":{"primary":"#0891b2","accent":"#22d3ee","ink":"#0f172a","paper":"#f8fafc"},"typography":{"heading":"Inter","body":"Inter","mono":"JetBrains Mono"}}'::jsonb,
+        '{"colors":{"primary":"#0e7490","accent":"#155e75","ink":"#0f172a","paper":"#f8fafc"},"typography":{"heading":"Inter","body":"Inter","mono":"JetBrains Mono"}}'::jsonb,
+        TRUE
+    ),
+    (
+        'Developer Console',
+        'developer-console',
+        'A terminal-informed preset with high-legibility green and cyan signals.',
+        '{"colors":{"primary":"#78FF9C","accent":"#5DD8FF","ink":"#E8F5E9","paper":"#07110A","surface":"#0D1B11","quiet":"#A8C5AE","line":"#275737"},"typography":{"heading":"JetBrains Mono, ui-monospace, monospace","body":"Atkinson Hyperlegible, Arial, sans-serif","mono":"JetBrains Mono, ui-monospace, monospace"}}'::jsonb,
         TRUE
     )
 ON CONFLICT (slug) DO NOTHING;
 
-INSERT INTO wireframe_templates (name, slug, description, sections, is_public)
-VALUES (
-    'Career Narrative',
-    'career-narrative',
-    'Hero, about, skills, experience, projects, and contact.',
-    '[{"key":"hero","label":"Hero"},{"key":"about","label":"About"},{"key":"skills","label":"Skills"},{"key":"experience","label":"Experience"},{"key":"projects","label":"Projects"},{"key":"contact","label":"Contact"}]'::jsonb,
-    TRUE
+INSERT INTO wireframe_templates (name, slug, description, sections, layout, is_public)
+VALUES
+(
+  'Executive Brief',
+  'executive-brief',
+  'A concise, recruiter-friendly profile built around positioning and selected career proof.',
+  '[{"key":"hero","label":"Identity","width":"content","alignment":"left","emphasis":"primary","group":"identity","slots":["name","headline","location"],"required_slots":["name","headline"],"min_items":1,"max_items":1,"item_limits":{},"overflow":"show-all","fallback":"show-available"},{"key":"about","label":"Positioning","width":"content","alignment":"left","emphasis":"standard","group":"narrative","slots":["body"],"required_slots":[],"min_items":0,"max_items":1,"item_limits":{},"overflow":"condense","fallback":"collapse"},{"key":"experience","label":"Selected Proof","width":"content","alignment":"left","emphasis":"standard","group":"proof","slots":["role","company","dates","summary","highlights","outcomes"],"required_slots":["role","highlights"],"min_items":1,"max_items":2,"item_limits":{"highlights":2,"outcomes":1,"skills":0},"overflow":"rank","fallback":"raw-text"},{"key":"contact","label":"Contact","width":"content","alignment":"left","emphasis":"quiet","group":"contact","slots":["email","phone","location","links"],"required_slots":[],"min_items":0,"max_items":1,"item_limits":{"links":2},"overflow":"condense","fallback":"collapse"}]'::jsonb,
+  '{"desktop":{"max_width":"narrow","columns":1,"navigation":"none"},"mobile":{"max_width":"narrow","columns":1,"navigation":"none"},"confidence":1,"detected":["Curated static starter"],"warnings":[],"unsupported":[]}'::jsonb,
+  TRUE
+),
+(
+  'Case Study Ledger',
+  'case-study-ledger',
+  'A project-led structure that separates context, contribution, and evidence of impact.',
+  '[{"key":"hero","label":"Positioning","width":"full","alignment":"left","emphasis":"primary","group":"identity","slots":["name","headline","location"],"required_slots":["name","headline"],"min_items":1,"max_items":1,"item_limits":{},"overflow":"show-all","fallback":"show-available"},{"key":"experience","label":"Featured Work","width":"full","alignment":"left","emphasis":"primary","group":"work","slots":["role","company","dates","summary","highlights","outcomes","skills"],"required_slots":["role","highlights"],"min_items":1,"max_items":4,"item_limits":{"highlights":3,"outcomes":2,"skills":4},"overflow":"condense","fallback":"raw-text"},{"key":"skills","label":"Capability Stack","width":"wide","alignment":"left","emphasis":"standard","group":"capabilities","slots":["items"],"required_slots":[],"min_items":0,"max_items":3,"item_limits":{},"overflow":"condense","fallback":"collapse"},{"key":"projects","label":"Additional Work","width":"wide","alignment":"left","emphasis":"standard","group":"work","slots":["body"],"required_slots":[],"min_items":0,"max_items":1,"item_limits":{},"overflow":"condense","fallback":"collapse"},{"key":"contact","label":"Contact","width":"full","alignment":"left","emphasis":"quiet","group":"contact","slots":["email","phone","location","links"],"required_slots":[],"min_items":0,"max_items":1,"item_limits":{"links":3},"overflow":"condense","fallback":"collapse"}]'::jsonb,
+  '{"desktop":{"max_width":"wide","columns":1,"navigation":"compact"},"mobile":{"max_width":"standard","columns":1,"navigation":"compact"},"confidence":1,"detected":["Curated static starter"],"warnings":[],"unsupported":[]}'::jsonb,
+  TRUE
+),
+(
+  'Career Atlas',
+  'career-atlas',
+  'A comprehensive portfolio spanning capabilities, career journey, achievements, and credentials.',
+  '[{"key":"hero","label":"Identity and Proof","width":"full","alignment":"left","emphasis":"primary","group":"identity","slots":["name","headline","location","proof_facts"],"required_slots":["name","headline"],"min_items":1,"max_items":1,"item_limits":{"proof_facts":4},"overflow":"condense","fallback":"show-available"},{"key":"skills","label":"Core Competencies","width":"full","alignment":"left","emphasis":"standard","group":"capabilities","slots":["items"],"required_slots":[],"min_items":0,"max_items":4,"item_limits":{},"overflow":"condense","fallback":"collapse"},{"key":"about","label":"Featured Story","width":"wide","alignment":"left","emphasis":"standard","group":"story","slots":["body"],"required_slots":[],"min_items":0,"max_items":1,"item_limits":{},"overflow":"condense","fallback":"collapse"},{"key":"experience","label":"Professional Journey","width":"full","alignment":"left","emphasis":"primary","group":"journey","slots":["role","company","dates","summary","highlights","outcomes","skills"],"required_slots":["role"],"min_items":1,"max_items":5,"item_limits":{"highlights":3,"outcomes":2,"skills":3},"overflow":"condense","fallback":"raw-text"},{"key":"projects","label":"Achievements","width":"content","alignment":"left","emphasis":"standard","group":"proof","slots":["body"],"required_slots":[],"min_items":0,"max_items":1,"item_limits":{},"overflow":"condense","fallback":"collapse"},{"key":"education","label":"Education","width":"content","alignment":"left","emphasis":"standard","group":"credentials","slots":["body"],"required_slots":[],"min_items":0,"max_items":1,"item_limits":{},"overflow":"condense","fallback":"collapse"},{"key":"contact","label":"Contact","width":"full","alignment":"left","emphasis":"quiet","group":"contact","slots":["email","phone","location","links"],"required_slots":[],"min_items":0,"max_items":1,"item_limits":{"links":4},"overflow":"condense","fallback":"collapse"}]'::jsonb,
+  '{"desktop":{"max_width":"wide","columns":2,"navigation":"inline"},"mobile":{"max_width":"standard","columns":1,"navigation":"compact"},"confidence":1,"detected":["Curated static starter"],"warnings":[],"unsupported":[]}'::jsonb,
+  TRUE
 )
 ON CONFLICT (slug) DO NOTHING;

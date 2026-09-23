@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     local_auth_user_id: str = "local-dev-user"
     local_auth_email: str = "local@portfoliosos.dev"
 
+    # Wireframe interpretation
+    openai_api_key: str = ""
+    openai_wireframe_model: str = "gpt-4o-mini"
+    max_wireframe_size_bytes: int = 10 * 1024 * 1024
+
     # Auth0
     auth0_domain: str = ""
     auth0_client_id: str = ""
